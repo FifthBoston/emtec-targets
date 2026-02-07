@@ -1,0 +1,35 @@
+[build]
+  publish = "public"
+  command = "echo 'Static site - no build needed'"
+
+# For full API functionality, use Netlify Functions or deploy to Node.js host
+# This config is for static hosting of the frontend only
+
+[[redirects]]
+  from = "/api/*"
+  to = "https://your-api-host.com/api/:splat"
+  status = 200
+  force = true
+
+[[headers]]
+  for = "/*"
+  [headers.values]
+    X-Frame-Options = "DENY"
+    X-XSS-Protection = "1; mode=block"
+    X-Content-Type-Options = "nosniff"
+    Referrer-Policy = "strict-origin-when-cross-origin"
+
+[[headers]]
+  for = "/*.css"
+  [headers.values]
+    Cache-Control = "public, max-age=31536000, immutable"
+
+[[headers]]
+  for = "/*.js"
+  [headers.values]
+    Cache-Control = "public, max-age=31536000, immutable"
+
+# Note: For full functionality with the API:
+# 1. Deploy the server.js to a Node.js host (Render, Railway, Fly.io)
+# 2. Update the /api/* redirect above to point to your API host
+# 3. Or use Netlify Functions to create serverless API endpoints
