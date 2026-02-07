@@ -13,9 +13,10 @@ function getPool() {
   if (!pool) {
     pool = new Pool({
       connectionString: process.env.DATABASE_URL,
-      ssl: { rejectUnauthorized: false },
+      ssl: true,
       max: 3,
       idleTimeoutMillis: 10000,
+      connectionTimeoutMillis: 10000,
     });
   }
   return pool;
@@ -32,6 +33,14 @@ export async function handler(event) {
   }
 
   try {
+    if (!process.env.DATABASE_URL) {
+      return {
+        statusCode: 500,
+        headers,
+        body: JSON.stringify({ error: 'DATABASE_URL not configured' })
+      };
+    }
+
     const pool = getPool();
     const result = await pool.query(`
       SELECT 
@@ -51,11 +60,11 @@ export async function handler(event) {
       body: JSON.stringify(result.rows)
     };
   } catch (error) {
-    console.error('Error:', error);
+    console.error('Materials error:', error.message);
     return {
       statusCode: 500,
       headers,
-      body: JSON.stringify({ error: 'Failed to fetch materials' })
+      body: JSON.stringify({ error: 'Failed to fetch materials', details: error.message })
     };
   }
 }
