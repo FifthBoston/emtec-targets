@@ -1,15 +1,36 @@
 [build]
   publish = "public"
-  command = "echo 'Static site - no build needed'"
+  functions = "netlify/functions"
 
-# For full API functionality, use Netlify Functions or deploy to Node.js host
-# This config is for static hosting of the frontend only
+[functions]
+  node_bundler = "esbuild"
+  included_files = ["node_modules/pg/**"]
+
+# Redirect API calls to Netlify Functions
+[[redirects]]
+  from = "/api/targets"
+  to = "/.netlify/functions/targets"
+  status = 200
 
 [[redirects]]
-  from = "/api/*"
-  to = "https://your-api-host.com/api/:splat"
+  from = "/api/materials"
+  to = "/.netlify/functions/materials"
   status = 200
-  force = true
+
+[[redirects]]
+  from = "/api/diameters"
+  to = "/.netlify/functions/diameters"
+  status = 200
+
+[[redirects]]
+  from = "/api/thicknesses"
+  to = "/.netlify/functions/thicknesses"
+  status = 200
+
+[[redirects]]
+  from = "/api/stats"
+  to = "/.netlify/functions/stats"
+  status = 200
 
 [[headers]]
   for = "/*"
@@ -27,9 +48,4 @@
 [[headers]]
   for = "/*.js"
   [headers.values]
-    Cache-Control = "public, max-age=31536000, immutable"
-
-# Note: For full functionality with the API:
-# 1. Deploy the server.js to a Node.js host (Render, Railway, Fly.io)
-# 2. Update the /api/* redirect above to point to your API host
-# 3. Or use Netlify Functions to create serverless API endpoints
+    Cache-Control = "public, max-age=86400"

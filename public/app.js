@@ -3,6 +3,7 @@
  * Connects to the API and renders the catalog UI
  */
 
+// API base - works with both Netlify Functions and local Express
 const API_BASE = '/api';
 
 // State
