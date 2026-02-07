@@ -237,7 +237,7 @@ function renderTargetCard(target) {
           <a href="#quote" class="btn btn-primary" onclick="prefillQuote('${target.part_number}', '${material}')">Request Quote</a>
         </div>
         <p class="product-vendor" style="font-size: 11px; color: #9ca3af; margin-top: 8px;">
-          Source: ${target.vendor || 'Ted Pella'}
+          Source: EMTEC-TARGETS
         </p>
       </div>
     </div>
