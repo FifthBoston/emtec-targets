@@ -3,12 +3,6 @@
  * Fetches and parses sputter target catalog from Ted Pella
  * 
  * Usage: npm run ingest
- * 
- * Features:
- * - Fetches HTML from source URL
- * - Parses product tables for disc and annular targets
- * - Upserts data to Neon Postgres (idempotent)
- * - Tracks source attribution
  */
 
 import pg from 'pg';
@@ -26,17 +20,17 @@ const pool = new Pool({
   ssl: { rejectUnauthorized: false }
 });
 
-const SOURCE_URL = process.env.TED_PELLA_SOURCE_URL || 'https://www.tedpella.com/example-sputter-targets';
+const SOURCE_URL = process.env.TED_PELLA_SOURCE_URL || 'https://www.tedpella.com/cressington_html/Cressington-Targets.aspx';
 const VENDOR = 'Ted Pella';
 
 /**
- * Fetch the source HTML (with caching for development)
+ * Fetch the source HTML
  */
 async function fetchSourceHTML() {
   const cacheFile = path.join(process.cwd(), '.cache', 'source-page.html');
   
   // Check for cached version in development
-  if (process.env.NODE_ENV === 'development' && fs.existsSync(cacheFile)) {
+  if (process.env.USE_CACHE === 'true' && fs.existsSync(cacheFile)) {
     console.log('📦 Using cached HTML from', cacheFile);
     return fs.readFileSync(cacheFile, 'utf8');
   }
@@ -45,7 +39,7 @@ async function fetchSourceHTML() {
   
   const response = await fetch(SOURCE_URL, {
     headers: {
-      'User-Agent': 'EmTec-Targets-Ingestion/1.0 (catalog sync)'
+      'User-Agent': 'Mozilla/5.0 (compatible; EmTec-Targets/1.0)'
     }
   });
   
@@ -56,143 +50,102 @@ async function fetchSourceHTML() {
   const html = await response.text();
   
   // Cache for development
-  if (process.env.NODE_ENV === 'development') {
-    fs.mkdirSync(path.dirname(cacheFile), { recursive: true });
-    fs.writeFileSync(cacheFile, html);
-    console.log('💾 Cached HTML to', cacheFile);
-  }
+  fs.mkdirSync(path.dirname(cacheFile), { recursive: true });
+  fs.writeFileSync(cacheFile, html);
+  console.log('💾 Cached HTML to', cacheFile);
   
   return html;
 }
 
 /**
- * Parse diameter from text (handles various formats)
+ * Parse product description to extract details
+ * Format: "Gold Target, 99.99% Au (Ø57mm x 0.1mm)"
  */
-function parseDiameter(text) {
-  if (!text) return null;
+function parseDescription(desc) {
+  const result = {
+    material: null,
+    purity: null,
+    diameter_mm: null,
+    thickness_mm: null,
+    outer_diameter_mm: null,
+    inner_diameter_mm: null,
+    target_type: 'disc',
+    alloy_ratio: null,
+    backing_plate: null,
+    notes: null
+  };
   
-  // Match patterns like "62mm", "62 mm", "2.4"", "2.4 inch"
-  const mmMatch = text.match(/(\d+(?:\.\d+)?)\s*mm/i);
-  if (mmMatch) return parseFloat(mmMatch[1]);
+  if (!desc) return result;
   
-  const inchMatch = text.match(/(\d+(?:\.\d+)?)\s*["″]?(?:\s*inch)?/i);
-  if (inchMatch) return parseFloat(inchMatch[1]) * 25.4; // Convert to mm
-  
-  // Just a number
-  const numMatch = text.match(/(\d+(?:\.\d+)?)/);
-  if (numMatch) return parseFloat(numMatch[1]);
-  
-  return null;
-}
-
-/**
- * Parse thickness from text
- */
-function parseThickness(text) {
-  if (!text) return null;
-  
-  const mmMatch = text.match(/(\d+(?:\.\d+)?)\s*mm/i);
-  if (mmMatch) return parseFloat(mmMatch[1]);
-  
-  // Sometimes thickness is in microns
-  const umMatch = text.match(/(\d+(?:\.\d+)?)\s*[μu]m/i);
-  if (umMatch) return parseFloat(umMatch[1]) / 1000;
-  
-  const numMatch = text.match(/(\d+(?:\.\d+)?)/);
-  if (numMatch) return parseFloat(numMatch[1]);
-  
-  return null;
-}
-
-/**
- * Parse purity from text (e.g., "99.99%", "99.999%")
- */
-function parsePurity(text) {
-  if (!text) return null;
-  
-  const match = text.match(/(\d+(?:\.\d+)?)\s*%/);
-  if (match) return match[0];
-  
-  // Handle formats like "4N" (99.99%) or "5N" (99.999%)
-  const nMatch = text.match(/(\d)N/i);
-  if (nMatch) {
-    const nines = parseInt(nMatch[1]);
-    return '99.' + '9'.repeat(nines - 2) + '%';
+  // Extract material (before "Target")
+  const materialMatch = desc.match(/^(.+?)\s*Target/i);
+  if (materialMatch) {
+    result.material = materialMatch[1].trim();
   }
   
-  return null;
+  // Extract purity (e.g., "99.99% Au" or "99.99% Au:Pd 60/40 ratio")
+  const purityMatch = desc.match(/(\d+\.?\d*%)\s*(\w+)/);
+  if (purityMatch) {
+    result.purity = purityMatch[1];
+  }
+  
+  // Check for alloy ratio
+  const alloyMatch = desc.match(/(\d+)[:/](\d+)\s*ratio/i);
+  if (alloyMatch) {
+    result.alloy_ratio = `${alloyMatch[1]}/${alloyMatch[2]}`;
+  }
+  
+  // Extract diameter (Ø62mm or Ø54mm)
+  const diameterMatch = desc.match(/[ØO](\d+(?:\.\d+)?)\s*(?:mm)?/i);
+  if (diameterMatch) {
+    result.diameter_mm = parseFloat(diameterMatch[1]);
+  }
+  
+  // Extract thickness (x 0.1mm or x 3.2mm)
+  const thicknessMatch = desc.match(/x\s*(\d+\.?\d*)\s*mm/i);
+  if (thicknessMatch) {
+    result.thickness_mm = parseFloat(thicknessMatch[1]);
+  }
+  
+  // Check for annular targets (OD/ID)
+  const annularODMatch = desc.match(/(\d+\.?\d*)\s*mm\s*O\.?D/i);
+  const annularIDMatch = desc.match(/(\d+\.?\d*)\s*mm\s*I\.?D/i);
+  if (annularODMatch && annularIDMatch) {
+    result.target_type = 'annular';
+    result.outer_diameter_mm = parseFloat(annularODMatch[1]);
+    result.inner_diameter_mm = parseFloat(annularIDMatch[1]);
+    result.diameter_mm = null; // Use OD/ID instead
+  }
+  
+  // Check for backing plate
+  if (desc.toLowerCase().includes('backing plate') || desc.toLowerCase().includes('copper backing')) {
+    result.backing_plate = 'Copper';
+  }
+  
+  // Notes for special items
+  if (desc.includes('NEW')) {
+    result.notes = 'New product';
+  }
+  if (desc.includes('ITO') || desc.includes('Indium Tin Oxide')) {
+    result.notes = (result.notes ? result.notes + '; ' : '') + 'Indium Tin Oxide compound';
+  }
+  
+  return result;
 }
 
 /**
- * Parse a table of disc targets
+ * Parse price string
  */
-function parseDiscTargets($, table, diameterMm) {
-  const targets = [];
+function parsePrice(priceStr) {
+  if (!priceStr) return null;
+  if (priceStr.includes('P.O.R.')) return null; // Price on Request
   
-  $(table).find('tr').each((i, row) => {
-    // Skip header rows
-    if ($(row).find('th').length > 0) return;
-    
-    const cells = $(row).find('td');
-    if (cells.length < 3) return;
-    
-    const partNumber = $(cells[0]).text().trim();
-    const material = $(cells[1]).text().trim();
-    const purity = parsePurity($(cells[2]).text());
-    const thickness = parseThickness($(cells[3]).text());
-    
-    if (!partNumber || !material) return;
-    
-    targets.push({
-      part_number: partNumber,
-      target_type: 'disc',
-      material: material,
-      purity: purity,
-      diameter_mm: diameterMm,
-      thickness_mm: thickness,
-      raw_excerpt: $(row).text().trim().substring(0, 500)
-    });
-  });
-  
-  return targets;
+  const match = priceStr.replace(/[$,]/g, '').match(/(\d+\.?\d*)/);
+  return match ? parseFloat(match[1]) : null;
 }
 
 /**
- * Parse annular targets (have OD and ID)
- */
-function parseAnnularTargets($, table) {
-  const targets = [];
-  
-  $(table).find('tr').each((i, row) => {
-    if ($(row).find('th').length > 0) return;
-    
-    const cells = $(row).find('td');
-    if (cells.length < 4) return;
-    
-    const partNumber = $(cells[0]).text().trim();
-    const material = $(cells[1]).text().trim();
-    const od = parseDiameter($(cells[2]).text());
-    const id = parseDiameter($(cells[3]).text());
-    const thickness = parseThickness($(cells[4]).text());
-    
-    if (!partNumber || !material) return;
-    
-    targets.push({
-      part_number: partNumber,
-      target_type: 'annular',
-      material: material,
-      outer_diameter_mm: od,
-      inner_diameter_mm: id,
-      thickness_mm: thickness,
-      raw_excerpt: $(row).text().trim().substring(0, 500)
-    });
-  });
-  
-  return targets;
-}
-
-/**
- * Main parsing function - customize based on actual page structure
+ * Parse the Ted Pella HTML for target data
  */
 function parseTargetsFromHTML(html) {
   const $ = cheerio.load(html);
@@ -200,53 +153,78 @@ function parseTargetsFromHTML(html) {
   
   console.log('📝 Parsing HTML for target data...');
   
-  // Strategy: Look for tables with product data
-  // This needs to be customized based on actual Ted Pella page structure
+  // Find all product rows
+  // The pattern is: Prod # | Description | Unit | Price
+  // Each row with a numeric product number
   
-  // Example: Find all tables
-  $('table').each((i, table) => {
-    const tableText = $(table).text().toLowerCase();
+  // Look for text patterns in the page content
+  const pageText = $('body').text();
+  
+  // Parse product entries using regex on the text content
+  // Pattern: 5-digit number followed by description with dimensions
+  const productPattern = /\b(\d{4,5}(?:-\w)?)\s+(?:NEW\s+)?(.+?Target.*?(?:Ø\d+.*?mm|O\.D\..*?I\.D\.).*?)\s+each\s+\$?([\d,]+\.?\d*|P\.O\.R\.)/gi;
+  
+  let match;
+  while ((match = productPattern.exec(pageText)) !== null) {
+    const partNumber = match[1];
+    const description = match[2].trim();
+    const price = match[3];
     
-    // Look for diameter indicators in nearby headings
-    const prevHeading = $(table).prevAll('h2, h3, h4, strong').first().text();
-    const diameterMatch = prevHeading.match(/(\d+(?:\.\d+)?)\s*mm/i);
+    const parsed = parseDescription(description);
     
-    if (diameterMatch) {
-      const diameter = parseFloat(diameterMatch[1]);
-      const discTargets = parseDiscTargets($, table, diameter);
-      allTargets.push(...discTargets);
-      console.log(`   Found ${discTargets.length} targets for ${diameter}mm diameter`);
+    if (parsed.material) {
+      allTargets.push({
+        part_number: partNumber,
+        ...parsed,
+        price_usd: parsePrice(price),
+        raw_excerpt: description.substring(0, 500)
+      });
     }
+  }
+  
+  // Also parse using DOM structure for better accuracy
+  $('table tr, .product-row, [class*="product"]').each((i, row) => {
+    const text = $(row).text();
     
-    // Check for annular targets
-    if (tableText.includes('annular') || tableText.includes('od') && tableText.includes('id')) {
-      const annularTargets = parseAnnularTargets($, table);
-      allTargets.push(...annularTargets);
-      console.log(`   Found ${annularTargets.length} annular targets`);
+    // Look for product number pattern
+    const prodMatch = text.match(/^\s*(\d{4,5}(?:-\w)?)\s+/);
+    if (!prodMatch) return;
+    
+    const partNumber = prodMatch[1];
+    
+    // Skip if already found
+    if (allTargets.find(t => t.part_number === partNumber)) return;
+    
+    // Extract description (contains Target and dimensions)
+    const descMatch = text.match(/(\w+(?:\/\w+)?\s+Target[^$]+?)(?:each|\$|P\.O\.R)/i);
+    if (!descMatch) return;
+    
+    const description = descMatch[1].trim();
+    const parsed = parseDescription(description);
+    
+    // Extract price
+    const priceMatch = text.match(/\$\s*([\d,]+\.?\d*)|P\.O\.R\./);
+    const price = priceMatch ? priceMatch[0] : null;
+    
+    if (parsed.material) {
+      allTargets.push({
+        part_number: partNumber,
+        ...parsed,
+        price_usd: parsePrice(price),
+        raw_excerpt: description.substring(0, 500)
+      });
     }
   });
   
-  // Fallback: If no tables found, try parsing other structures
-  if (allTargets.length === 0) {
-    console.log('⚠️  No tables found - trying alternative parsing...');
-    
-    // Look for product rows/divs with part numbers
-    $('[class*="product"], [class*="item"], tr, .row').each((i, el) => {
-      const text = $(el).text();
-      const partMatch = text.match(/\b(\d{5})\b/); // 5-digit part numbers
-      
-      if (partMatch) {
-        allTargets.push({
-          part_number: partMatch[1],
-          target_type: 'disc',
-          material: 'Unknown',
-          raw_excerpt: text.trim().substring(0, 500)
-        });
-      }
-    });
-  }
+  // Deduplicate by part number
+  const seen = new Set();
+  const unique = allTargets.filter(t => {
+    if (seen.has(t.part_number)) return false;
+    seen.add(t.part_number);
+    return true;
+  });
   
-  return allTargets;
+  return unique;
 }
 
 /**
@@ -254,12 +232,14 @@ function parseTargetsFromHTML(html) {
  */
 async function upsertSource(client) {
   const result = await client.query(`
-    INSERT INTO sources (vendor, source_url, last_fetched_at)
-    VALUES ($1, $2, NOW())
+    INSERT INTO sources (vendor, source_url, source_page_title, last_fetched_at)
+    VALUES ($1, $2, $3, NOW())
     ON CONFLICT (vendor, source_url) 
-    DO UPDATE SET last_fetched_at = NOW()
+    DO UPDATE SET 
+      last_fetched_at = NOW(),
+      source_page_title = EXCLUDED.source_page_title
     RETURNING id
-  `, [VENDOR, SOURCE_URL]);
+  `, [VENDOR, SOURCE_URL, 'Disk or Annular Sputter Targets']);
   
   return result.rows[0].id;
 }
@@ -328,16 +308,21 @@ async function ingest() {
     
     // Parse targets
     const targets = parseTargetsFromHTML(html);
-    console.log(`\\n✅ Parsed ${targets.length} total targets`);
+    console.log(`\n✅ Parsed ${targets.length} total targets`);
     
     if (targets.length === 0) {
       console.log('⚠️  No targets found - check parsing logic');
-      console.log('💡 You may need to customize the parsing for the actual page structure');
       process.exit(1);
     }
     
+    // Show sample
+    console.log('\n📋 Sample parsed targets:');
+    targets.slice(0, 5).forEach(t => {
+      console.log(`   ${t.part_number}: ${t.material} ${t.diameter_mm || t.outer_diameter_mm}mm ${t.target_type}`);
+    });
+    
     // Connect to database
-    console.log('\\n📦 Connecting to Neon Postgres...');
+    console.log('\n📦 Connecting to Neon Postgres...');
     client = await pool.connect();
     
     // Upsert source
@@ -345,8 +330,8 @@ async function ingest() {
     console.log(`📝 Source record ID: ${sourceId}`);
     
     // Upsert all targets
-    console.log('\\n💾 Upserting targets...');
-    let inserted = 0, updated = 0;
+    console.log('\n💾 Upserting targets...');
+    let inserted = 0, updated = 0, errors = 0;
     
     for (const target of targets) {
       try {
@@ -358,13 +343,32 @@ async function ingest() {
         }
       } catch (err) {
         console.error(`   ❌ Failed to upsert ${target.part_number}:`, err.message);
+        errors++;
       }
     }
     
-    console.log(`\\n✅ Ingestion complete!`);
+    console.log(`\n✅ Ingestion complete!`);
     console.log(`   📥 Inserted: ${inserted}`);
     console.log(`   🔄 Updated: ${updated}`);
+    console.log(`   ❌ Errors: ${errors}`);
     console.log(`   📊 Total: ${targets.length}`);
+    
+    // Show stats
+    const stats = await client.query(`
+      SELECT 
+        COUNT(*) as total,
+        COUNT(DISTINCT material) as materials,
+        COUNT(DISTINCT diameter_mm) as diameters,
+        COUNT(*) FILTER (WHERE target_type = 'disc') as disc_count,
+        COUNT(*) FILTER (WHERE target_type = 'annular') as annular_count
+      FROM targets
+    `);
+    
+    console.log('\n📊 Catalog Summary:');
+    console.log(`   Total targets: ${stats.rows[0].total}`);
+    console.log(`   Unique materials: ${stats.rows[0].materials}`);
+    console.log(`   Disc targets: ${stats.rows[0].disc_count}`);
+    console.log(`   Annular targets: ${stats.rows[0].annular_count}`);
     
   } catch (error) {
     console.error('❌ Ingestion failed:', error.message);
