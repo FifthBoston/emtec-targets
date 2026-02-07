@@ -372,11 +372,13 @@
     </section>
 
     <!-- Footer -->
-    <footer class="footer" style="background: #1f2937; color: white; padding: 40px 0;">
+    <footer class="footer" style="background: #111827; color: white; padding: 60px 0 0 0;">
         <div class="container">
-            <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 20px;">
+            <!-- Main Footer Content -->
+            <div style="display: grid; grid-template-columns: 2fr 1fr 1fr 1.5fr; gap: 48px; padding-bottom: 48px;">
+                <!-- Brand Column -->
                 <div>
-                    <div class="logo" style="margin-bottom: 8px;">
+                    <div class="logo" style="margin-bottom: 16px;">
                         <div class="logo-icon">
                             <svg viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg">
                                 <circle cx="20" cy="20" r="18" stroke="currentColor" stroke-width="2"/>
@@ -386,14 +388,70 @@
                         </div>
                         <span class="logo-text">EmTec Targets</span>
                     </div>
-                    <p style="font-size: 14px; color: #9ca3af;">Premium sputter target catalog</p>
-                </div>
-                <div style="text-align: right;">
-                    <p style="font-size: 14px; color: #9ca3af;">
-                        Designed with ❤️ by <a href="https://fifthboston.services/" target="_blank" style="color: #60a5fa;">FifthBoston.Services</a>
+                    <p style="font-size: 14px; color: #9ca3af; line-height: 1.6; max-width: 280px;">
+                        Your trusted source for high-quality sputtering targets at competitive prices. Serving research labs, universities, and semiconductor manufacturers worldwide.
                     </p>
-                    <p style="font-size: 12px; color: #6b7280; margin-top: 4px;">© 2026 EmTec Targets. All rights reserved.</p>
                 </div>
+                
+                <!-- Materials Column -->
+                <div>
+                    <h4 style="font-size: 14px; font-weight: 600; color: #ffffff; margin-bottom: 20px;">Materials</h4>
+                    <ul style="list-style: none; padding: 0; margin: 0;">
+                        <li style="margin-bottom: 12px;"><a href="#catalog" style="color: #9ca3af; text-decoration: none; font-size: 14px;">Gold Targets</a></li>
+                        <li style="margin-bottom: 12px;"><a href="#catalog" style="color: #9ca3af; text-decoration: none; font-size: 14px;">Silver Targets</a></li>
+                        <li style="margin-bottom: 12px;"><a href="#catalog" style="color: #9ca3af; text-decoration: none; font-size: 14px;">Platinum Targets</a></li>
+                        <li style="margin-bottom: 12px;"><a href="#catalog" style="color: #9ca3af; text-decoration: none; font-size: 14px;">Copper Targets</a></li>
+                        <li style="margin-bottom: 12px;"><a href="#catalog" style="color: #9ca3af; text-decoration: none; font-size: 14px;">Aluminum Targets</a></li>
+                        <li style="margin-bottom: 12px;"><a href="#catalog" style="color: #9ca3af; text-decoration: none; font-size: 14px;">Titanium Targets</a></li>
+                    </ul>
+                </div>
+                
+                <!-- Company Column -->
+                <div>
+                    <h4 style="font-size: 14px; font-weight: 600; color: #ffffff; margin-bottom: 20px;">Company</h4>
+                    <ul style="list-style: none; padding: 0; margin: 0;">
+                        <li style="margin-bottom: 12px;"><a href="#catalog" style="color: #9ca3af; text-decoration: none; font-size: 14px;">How It Works</a></li>
+                        <li style="margin-bottom: 12px;"><a href="#quote" style="color: #9ca3af; text-decoration: none; font-size: 14px;">Request Quote</a></li>
+                        <li style="margin-bottom: 12px;"><a href="#about" style="color: #9ca3af; text-decoration: none; font-size: 14px;">About Us</a></li>
+                        <li style="margin-bottom: 12px;"><a href="#quote" style="color: #9ca3af; text-decoration: none; font-size: 14px;">Contact</a></li>
+                        <li style="margin-bottom: 12px;"><a href="#" style="color: #9ca3af; text-decoration: none; font-size: 14px;">FAQ</a></li>
+                    </ul>
+                </div>
+                
+                <!-- Contact Column -->
+                <div>
+                    <h4 style="font-size: 14px; font-weight: 600; color: #ffffff; margin-bottom: 20px;">Contact Us</h4>
+                    <ul style="list-style: none; padding: 0; margin: 0;">
+                        <li style="margin-bottom: 12px; display: flex; align-items: center; gap: 10px;">
+                            <span style="color: #3b82f6;">📞</span>
+                            <span style="color: #9ca3af; font-size: 14px;">1-800-555-1234</span>
+                        </li>
+                        <li style="margin-bottom: 12px; display: flex; align-items: center; gap: 10px;">
+                            <span style="color: #3b82f6;">✉️</span>
+                            <span style="color: #9ca3af; font-size: 14px;">sales@emtec-targets.com</span>
+                        </li>
+                        <li style="margin-bottom: 12px; display: flex; align-items: center; gap: 10px;">
+                            <span style="color: #3b82f6;">🕐</span>
+                            <span style="color: #9ca3af; font-size: 14px;">Mon-Fri: 9am-6pm EST</span>
+                        </li>
+                    </ul>
+                </div>
+            </div>
+            
+            <!-- Footer Bottom -->
+            <div style="border-top: 1px solid #374151; padding: 24px 0; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 16px;">
+                <p style="font-size: 14px; color: #6b7280;">© 2026 EmTec Targets. All rights reserved.</p>
+                <div style="display: flex; gap: 24px;">
+                    <a href="#" style="font-size: 14px; color: #9ca3af; text-decoration: none;">Privacy Policy</a>
+                    <a href="#" style="font-size: 14px; color: #9ca3af; text-decoration: none;">Terms of Service</a>
+                </div>
+            </div>
+            
+            <!-- Designed By -->
+            <div style="border-top: 1px solid #374151; padding: 20px 0; text-align: center;">
+                <p style="font-size: 13px; color: #6b7280;">
+                    Designed with ❤️ by <a href="https://fifthboston.services/" target="_blank" style="color: #60a5fa; text-decoration: none;">FifthBoston.Services</a>
+                </p>
             </div>
         </div>
     </footer>
